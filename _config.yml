@@ -1,0 +1,10 @@
+# 網站基本設定
+title: "我的日更寫作紀錄" # 替換成您的部落格名稱
+email: "ccghost@gmail.com" # 可選
+description: "專注於每日實用內容輸出。"
+baseurl: ""
+url: "https://您的用戶名.github.io" # 請替換成您的實際網址
+
+# Jekyll 處理設定 (使用內建主題確保功能)
+markdown: kramdown
+theme: minima
