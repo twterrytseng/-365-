@@ -20,8 +20,6 @@ who | grep wrongname
 # 如果有登入，使用 pkill 終止其所有程序
 pkill -u wrongname
 
-# 語法：groupmod -n 新群組名稱 舊群組名稱
-sudo groupmod -n correctname wrongname
 
 # 語法：usermod -l 新帳號名稱 -d 新家目錄路徑 -m 舊帳號名稱
 sudo usermod -l correctname -d /home/correctname -m wrongname
