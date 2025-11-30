@@ -1,0 +1,26 @@
+
+services:
+  traefik:
+    image: traefik:v3.6
+    container_name: traefik
+    restart: unless-stopped
+    ports:
+      - "80:80"       # HTTP 入口點
+      - "8080:8080"   # 儀表板
+      - "17000:17000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command:
+      - --entrypoints.web.address=:80
+      - --entrypoints.custom_port.address=:17000
+      - --api.insecure=true
+      - --api.dashboard=true
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=webproxy  # 告訴 Traefik 只在這個網絡中尋找服務
+    networks:
+      - webproxy
+
+networks:
+  webproxy:
+    external: true
