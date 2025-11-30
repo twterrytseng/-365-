@@ -1,22 +1,84 @@
 📝 Traefik Docker 設定重點整理
 
-概念,說明,配置方式
-靜態配置,  Traefik 啟動時的基礎設定。
-  定義監聽端口、啟用 Provider 等。
-    traefik-compose.yml 檔案中的 command 和 ports 區塊。
-動態配置,
-  應用程式的路由規則。
-  Traefik 在運行中自動發現並更新。
-    應用程式 docker-compose.yml 檔案中的 Docker Labels。
-Entrypoint (入口點),
-  Traefik 監聽流量的端口（例如：web 監聽 80，websecure 監聽 443，或自定義的 custom_port 監聽 17000）。,
-    靜態配置 (--entrypoints.web.address=:80)。
-Router (路由器),
-  根據規則（例如域名 Host 或路徑 Path）將流量從 Entrypoint 導向 Service。,
-    動態配置 (traefik.http.routers.name.rule=Host(...))。
-Service (服務),
-  Traefik 如何連接到實際運行的應用程式容器（需要知道容器內部的端口）。,
-    動態配置 (traefik.http.services.name.loadbalancer.server.port=9999)。
+## 靜態配置
+Treafik.yml  註意 port , command 這2個區塊
+
+
+services:
+  traefik:
+    image: traefik:v3.6
+    container_name: traefik
+    restart: unless-stopped
+    ports:
+      - "80:80"       # HTTP 入口點
+      - "8080:8080"   # 儀表板
+      - "17000:17000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command:
+      - --entrypoints.web.address=:80
+      - --entrypoints.custom_port.address=:17000
+      - --api.insecure=true
+      - --api.dashboard=true
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=webproxy  # 告訴 Traefik 只在這個網絡中尋找服務
+    networks:
+      - webproxy
+
+networks:
+  webproxy:
+    external: true
+
+
+## 動態配置
+應用程式   web-compose.yml 使用 docker lable 設定
+
+services:
+  # ----------------------------------------------------
+  # 服務一：web-1 (內部端口 9999, Host: web1.local)
+  # ----------------------------------------------------
+  web-1:
+    image: traefik/whoami # 使用 Traefik 官方測試鏡像，默認監聽 80 端口。
+    container_name: web-1
+    # 由於 whoami 默認監聽 80，為了模擬您的 9999 需求，我們需要傳入參數
+    command: ["--port", "9999"]
+
+    labels:
+      - traefik.enable=true
+      # Router for web-1
+      - traefik.http.routers.web-1-router.entrypoints=custom_port
+      - traefik.http.routers.web-1-router.rule=Host(`web1.local`)
+      # Service for web-1: **重點在這裡！** 指定容器內部監聽的 9999 端口
+      - traefik.http.services.web-1-service.loadbalancer.server.port=9999
+
+    networks:
+      - webproxy # 只連接到這個單一的網路
+
+  # ----------------------------------------------------
+  # 服務二：web-2 (內部端口 10000, Host: web2.local)
+  # ----------------------------------------------------
+  web-2:
+    image: traefik/whoami
+    container_name: web-2
+    # 為了模擬您的 10000 需求，我們傳入參數
+    command: ["--port", "10000"]
+
+    labels:
+      - traefik.enable=true
+      # Router for web-2
+      - traefik.http.routers.web-2-router.entrypoints=web
+      - traefik.http.routers.web-2-router.rule=Host(`web2.local`)
+      # Service for web-2: **重點在這裡！** 指定容器內部監聽的 10000 端口
+      - traefik.http.services.web-2-service.loadbalancer.server.port=10000
+
+    networks:
+      - webproxy # 只連接到這個單一的網路
+
+networks:
+  webproxy:
+    external: true
+
 
 網路與多服務部署最佳實踐
 
