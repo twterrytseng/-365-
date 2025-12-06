@@ -85,7 +85,7 @@ Cloud-Init Drive (或稱為 ci-drive) 在 PVE 中是一個特定的虛擬裝置�
 rm -f /etc/ssh/ssh_host_*
 
 # 清理 Machine ID (修正版)： 在 RHEL/Rocky 9 中，處理 Machine ID 的最佳方式如下
-# 清空 machine-id 內容，但保留檔案 (systemd 需要檔案存在)
+清空 machine-id 內容，但保留檔案 (systemd 需要檔案存在)
 truncate -s 0 /etc/machine-id
 
 # 刪除 dbus id (如果有)
