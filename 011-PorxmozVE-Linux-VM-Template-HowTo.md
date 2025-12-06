@@ -19,17 +19,13 @@ Cloud-Init Drive 是 Proxmox VE 實現現代化 VM 樣板管理的核心機制�
 這個「驅動器」並非像硬碟一樣用來儲存作業系統，而是一個虛擬的配置注入點，專門用來在虛擬機第一次啟動時，將您在 Proxmox 介面上設定的參數傳遞給 VM 內部的 Cloud-Init 服務。
 在 Proxmox VE 中添加 Cloud-Init Drive 的步驟
 
-您問得非常好，Cloud-Init Drive 是 Proxmox VE 實現現代化 VM 樣板管理的核心機制。
-
+Cloud-Init Drive 是 Proxmox VE 實現現代化 VM 樣板管理的核心機制。
 這個「驅動器」並非像硬碟一樣用來儲存作業系統，而是一個虛擬的配置注入點，專門用來在虛擬機第一次啟動時，將您在 Proxmox 介面上設定的參數傳遞給 VM 內部的 Cloud-Init 服務。
 
 以下是 Cloud-Init Drive 的完整概念解析：
 什麼是 Cloud-Init (雲端初始化)？
-
 Cloud-Init 是一個行業標準的跨平臺程式，用於初始化雲端伺服器實例 (Cloud Server Instances)。
-
 在虛擬化環境中，Cloud-Init 的作用就是：當您從一個 Template 複製出新的 VM 時，它會接管並執行一次性的配置任務，確保這台新機器的設定是獨一無二且符合需求的。
-
 它主要處理的任務包括：
 
     Hostname：設定主機名稱。
