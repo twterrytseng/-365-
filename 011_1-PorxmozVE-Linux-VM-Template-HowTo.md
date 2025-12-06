@@ -79,6 +79,15 @@ Cloud-Init Drive (或稱為 ci-drive) 在 PVE 中是一個特定的虛擬裝置�
 
 添加完成後，您會在 Hardware 列表看到一個新的裝置，名稱類似於 CD-ROM (cloudinit) 或 CloudInit Drive。這就完成了 Template 在 PVE 端的硬體準備工作。
 
+設定 Serial Console (序列埠控制台)：
+
+    Cloud-Init 依賴序列埠來運作得更好。
+
+    在 Hardware 頁面，如果看到 Display 是 Default，建議雙擊修改為 Serial terminal 0 (vga) 或是直接 Add > Serial Port (設為 0)。
+
+    如果不確定，保持預設通常也能運作，但推薦設定 Serial Port。
+
+
 
 
 # 清理 SSH Host Keys (防止金鑰重複)：
