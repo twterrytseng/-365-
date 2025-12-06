@@ -1,3 +1,5 @@
+##  video   https://www.youtube.com/watch?v=CV3pi8KQEy0   ##
+
 Traefik 路由概念流程圖
 
 Request ->  Entrypoint/Port -> Middleware/Rules -> Route/Rules -> Service/Internet Port -> Application/Container
