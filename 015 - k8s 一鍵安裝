@@ -1,0 +1,144 @@
+
+#!/usr/bin/env bash
+# Rocky Linux 8/9 - Kubernetes 控制平面 + Calico 一鍵安裝腳本（修正版）
+# 來源與最佳實踐：
+# - kubeadm 與節點先決條件、倉庫與初始化：kubernetes.io/docs/...  [8](https://juejin.cn/post/7460374471699906612)[5](https://developer.aliyun.com/article/1671272)
+# - 容器運行時、cgroup 驅動一致性（containerd + systemd）：[2](https://devops.stackexchange.com/questions/5898/how-to-get-kubernetes-pod-network-cidr)
+# - Calico Operator/CRDs 正確安裝流程：[1](https://github.com/Mirantis/cri-dockerd)
+# - 端口與防火牆（Ports and Protocols）：[4](https://github.com/containerd/containerd/discussions/5413)
+
+set -euo pipefail
+
+### ========== 可調變數 ==========
+K8S_RPM_BASEURL="https://pkgs.k8s.io/core:/stable:/v1.30/rpm/"
+K8S_RPM_GPGKEY="https://pkgs.k8s.io/core:/stable:/v1.30/rpm/repodata/repomd.xml.key"
+K8S_VERSION="v1.30.0"
+
+POD_CIDR="172.16.0.0/16"
+SERVICE_CIDR="10.96.0.0/12"
+
+CALICO_VERSION="v3.27.0"
+
+DISABLE_FIREWALLD="true"
+SET_SELINUX_PERMISSIVE="true"
+
+### ========== 工具 ==========
+log(){ echo -e "\033[1;32m[INFO]\033[0m $*"; }
+warn(){ echo -e "\033[1;33m[WARN]\033[0m $*"; }
+err(){ echo -e "\033[1;31m[ERR ]\033[0m $*"; }
+require_root(){ [[ "$(id -u)" -eq 0 ]] || { err "請以 root 執行"; exit 1; } }
+first_ipv4(){ ip -4 -o addr show scope global | awk '{print $4}' | cut -d/ -f1 | head -n1; }
+
+### ========== 前置 ==========
+require_root
+dnf -y update
+dnf -y install curl wget bash-completion iproute iproute-tc jq tar chrony
+systemctl enable --now chronyd || true
+
+# Kernel 模組與 sysctl
+cat <<'EOF' | tee /etc/modules-load.d/k8s.conf
+overlay
+br_netfilter
+EOF
+modprobe overlay || true
+modprobe br_netfilter || true
+
+cat <<'EOF' | tee /etc/sysctl.d/k8s.conf
+net.bridge.bridge-nf-call-iptables = 1
+net.bridge.bridge-nf-call-ip6tables = 1
+net.ipv4.ip_forward = 1
+EOF
+sysctl --system
+
+# swap / SELinux
+sed -i '/ swap / s/^/#/' /etc/fstab || true
+swapoff -a || true
+if [[ "${SET_SELINUX_PERMISSIVE}" == "true" ]]; then
+  setenforce 0 || true
+  sed -i 's/^SELINUX=enforcing/SELINUX=permissive/' /etc/selinux/config || true
+fi
+
+# 防火牆
+if [[ "${DISABLE_FIREWALLD}" == "true" ]]; then
+  systemctl disable --now firewalld || true
+else
+  firewall-cmd --permanent --add-port=6443/tcp || true
+  firewall-cmd --permanent --add-port=2379-2380/tcp || true
+  firewall-cmd --permanent --add-port=10250/tcp || true
+  firewall-cmd --permanent --add-port=10257/tcp || true
+  firewall-cmd --permanent --add-port=10259/tcp || true
+  firewall-cmd --reload || true
+fi
+
+### ========== 安裝 containerd（Docker repo 版本） ==========
+dnf -y install dnf-plugins-core
+dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+dnf -y install containerd.io
+mkdir -p /etc/containerd
+containerd config default | tee /etc/containerd/config.toml >/dev/null
+sed -i 's/^\(\s*SystemdCgroup = \).*/\1true/' /etc/containerd/config.toml
+systemctl daemon-reload
+systemctl enable --now containerd
+
+### ========== 安裝 kubeadm/kubelet/kubectl ==========
+cat >/etc/yum.repos.d/kubernetes.repo <<EOF
+[kubernetes]
+name=Kubernetes
+baseurl=${K8S_RPM_BASEURL}
+enabled=1
+gpgcheck=1
+gpgkey=${K8S_RPM_GPGKEY}
+EOF
+
+dnf -y install kubelet kubeadm kubectl
+dnf -y install 'dnf-command(versionlock)' || true
+dnf versionlock add kubelet kubeadm kubectl || true
+systemctl enable kubelet
+
+# 指定 kubelet 使用 containerd（官方建議）
+mkdir -p /etc/sysconfig
+cat >/etc/sysconfig/kubelet <<'EOF'
+KUBELET_EXTRA_ARGS="--container-runtime=remote --container-runtime-endpoint=unix:///run/containerd/containerd.sock"
+EOF
+systemctl daemon-reload
+systemctl restart kubelet || true
+
+### ========== kubeadm init ==========
+if [[ -f /etc/kubernetes/admin.conf ]]; then
+  warn "叢集已存在，略過初始化。"
+else
+  API_ADDR="$(first_ipv4)"
+  # 可選：預拉映像
+  kubeadm config images pull --kubernetes-version "${K8S_VERSION}" --cri-socket=unix:///run/containerd/containerd.sock || true
+
+  kubeadm init \
+    --kubernetes-version="${K8S_VERSION}" \
+    --pod-network-cidr="${POD_CIDR}" \
+    --service-cidr="${SERVICE_CIDR}" \
+    --apiserver-advertise-address="${API_ADDR}" \
+    --cri-socket=unix:///run/containerd/containerd.sock
+fi
+
+# kubectl 設定
+mkdir -p $HOME/.kube
+cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+chown $(id -u):$(id -g) $HOME/.kube/config
+
+### ========== 安裝 Calico（Operator/CRDs + custom-resources） ==========
+# 1) 先 CRDs
+kubectl apply -f "https://raw.githubusercontent.com/projectcalico/calico/${CALICO_VERSION}/manifests/operator-crds.yaml"
+# 2) 再 Operator（可保留 --server-side，但非必需）
+kubectl apply -f "https://raw.githubusercontent.com/projectcalico/calico/${CALICO_VERSION}/manifests/tigera-operator.yaml" --server-side
+# 3) 調整 IPPool 與套用
+curl -fsSL -o custom-resources.yaml "https://raw.githubusercontent.com/projectcalico/calico/${CALICO_VERSION}/manifests/custom-resources.yaml"
+sed -i "s#cidr: .*#cidr: ${POD_CIDR}#g" custom-resources.yaml
+kubectl apply -f custom-resources.yaml
+
+### ========== 檢查與輸出 ==========
+kubectl -n tigera-operator get pods
+kubectl -n calico-system get pods
+kubectl get nodes -o wide
+kubectl get pods -A
+
+# 輸出 Worker 節點加入命令
+kubeadm token create --print-join-command
