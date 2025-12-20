@@ -1,0 +1,65 @@
+這是一份專門針對 **Kubernetes 套件版本管理 (Versionlock)** 的標準作業程序（SOP）：
+
+---
+
+# Kubernetes 套件版本管理 (Versionlock) SOP
+
+## 1. 安裝 Versionlock 外掛
+
+在 Rocky Linux 9 中，需先安裝 DNF 外掛方可使用鎖定功能：
+
+```bash
+sudo dnf install -y 'dnf-command(versionlock)'
+
+```
+
+## 2. 執行版本鎖定
+
+安裝好指定版本的 Kubernetes 組件後，執行鎖定以防止執行 `dnf update` 時被意外升級：
+
+```bash
+sudo dnf versionlock add kubelet kubeadm kubectl
+
+```
+
+## 3. 日常維運指令
+
+* **查看目前鎖定名單**：
+```bash
+sudo dnf versionlock list
+
+```
+
+
+* **解除特定套件鎖定**：
+```bash
+sudo dnf versionlock delete kubelet kubeadm kubectl
+
+```
+
+
+* **清空所有鎖定設定**：
+```bash
+sudo dnf versionlock clear
+
+```
+
+
+
+## 4. 建議升級流程 (SOP)
+
+當計畫性升級 K8s 叢集時，請務必遵循以下順序，以確保套件能順利更新：
+
+1. **解除鎖定**：
+`sudo dnf versionlock delete kubelet kubeadm kubectl`
+2. **執行版本更新**：
+`sudo dnf install -y kubelet-X.X.X kubeadm-X.X.X kubectl-X.X.X`
+3. **重新執行鎖定**：
+`sudo dnf versionlock add kubelet kubeadm kubectl`
+
+---
+
+### 注意事項：
+
+* **版本一致性**：建議同時鎖定 `kubelet`、`kubeadm` 與 `kubectl`，以避免版本不一致導致的叢集錯誤。
+* **靜默跳過**：一旦鎖定，`dnf update` 會直接跳過這些套件而不顯示警告，維運時請定期檢查鎖定名單。
