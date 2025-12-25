@@ -1,0 +1,18 @@
+#version: "3.8"
+
+services:
+  haproxy:
+    image: haproxy:2.9
+    container_name: haproxy-k8s-api
+    restart: unless-stopped
+
+    # ★ 關鍵：必須使用 host network
+    network_mode: host
+
+    volumes:
+      - ./haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+
+    command: >
+      haproxy -W -db
+      -f /usr/local/etc/haproxy/haproxy.cfg
+
